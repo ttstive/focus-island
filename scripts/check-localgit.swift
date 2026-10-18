@@ -82,6 +82,41 @@ struct LocalGitChecks {
         let autoSnapshot = try await LocalGit.snapshot([emptySelection], extraEmails: "unrelated@example.test", date: Date())
         try check(autoSnapshot.commits >= 1 && autoSnapshot.detectedEmails[emptySelection.path] == automatic, "Count the actual local Git author identity even when the saved GitHub email differs")
         print("PASS generated local Git author identity with a different saved email")
+        // A repository can enable signature display and choose an executable verifier.
+        // Reproduce the old command's side effect, then prove the scanner suppresses it.
+        let hostile = root.appendingPathComponent("signature-fixture").path
+        try await run(["init", hostile])
+        try await configure(hostile)
+        let marker = root.appendingPathComponent("verifier-ran")
+        let verifier = root.appendingPathComponent("verifier")
+        try Data("#!/bin/sh\n/usr/bin/touch '\(marker.path)'\nexit 1\n".utf8).write(to: verifier)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: verifier.path)
+        try await run(["-C", hostile, "config", "log.showSignature", "true"])
+        try await run(["-C", hostile, "config", "gpg.program", verifier.path])
+        let tree = try await LocalGit.command("/usr/bin/git", ["-C", hostile, "write-tree"])
+        let stamp = Int(Date().timeIntervalSince1970)
+        let commit = "tree \(tree.text.trimmingCharacters(in: .whitespacesAndNewlines))\nauthor Test <me@example.test> \(stamp) +0000\ncommitter Test <me@example.test> \(stamp) +0000\ngpgsig -----BEGIN PGP SIGNATURE-----\n ZmFrZQ==\n -----END PGP SIGNATURE-----\n\nSignature fixture\n"
+        let object = root.appendingPathComponent("commit-object")
+        try Data(commit.utf8).write(to: object)
+        let hash = try await LocalGit.command("/usr/bin/git", ["-C", hostile, "hash-object", "-t", "commit", "-w", object.path])
+        try check(hash.status == 0, "Signed fixture must be stored")
+        try await run(["-C", hostile, "update-ref", "HEAD", hash.text.trimmingCharacters(in: .whitespacesAndNewlines)])
+        _ = try await LocalGit.command("/usr/bin/git", ["-C", hostile, "log", "--all", "--format=%H"])
+        try check(FileManager.default.fileExists(atPath: marker.path), "Unsafe baseline must reproduce verifier execution")
+        try FileManager.default.removeItem(at: marker)
+        let hostileSelection = try await LocalGit.inspect(hostile)
+        let safe = try await LocalGit.snapshot([hostileSelection], extraEmails: "", date: Date())
+        try check(safe.commits == 1 && !FileManager.default.fileExists(atPath: marker.path), "Scanner must count without executing the repository verifier")
+        print("PASS repository-controlled verifier execution blocked (baseline reproduced)")
+        do {
+            _ = try await LocalGit.command("/usr/bin/yes", [], timeout: 5)
+            throw Failure(description: "Unlimited output must be rejected")
+        } catch let error as ServiceError {
+            try check(error.message.contains("size limit"), "Output limit must fail explicitly")
+        }
+        let stubborn = try await LocalGit.command("/bin/sh", ["-c", "trap '' TERM; exec /bin/sleep 10"], timeout: 0.1)
+        try check(stubborn.status == 124, "Timeout must stop a process that ignores SIGTERM")
+        print("PASS bounded output and enforced timeout")
         let timed = try await LocalGit.command("/bin/sleep", ["10"], timeout: 0.1)
         try check(timed.status != 0, "Long-running processes must time out")
         print("PASS process timeout")
@@ -91,8 +126,14 @@ struct LocalGitChecks {
         try Data(LocalGit.githubHostKey.utf8).write(to: knownHosts)
         let fingerprint = try await LocalGit.command("/usr/bin/ssh-keygen", ["-lf", knownHosts.path, "-E", "sha256"])
         try check(fingerprint.status == 0 && fingerprint.text.contains(LocalGit.githubHostFingerprint), "Bundled GitHub host key must match the reviewed official fingerprint")
-        let config = try await LocalGit.command("/usr/bin/ssh", ["-G", "-F", "/dev/null"] + LocalGit.sshArguments(knownHosts: knownHosts))
+        let sshConfig = root.appendingPathComponent("ssh-config")
+        try Data("Host *\n ForwardAgent yes\n ForwardX11 yes\n LocalForward 12345 localhost:80\n PermitLocalCommand yes\n LocalCommand touch should-not-run\n ControlMaster auto\n ControlPath /tmp/should-not-reuse\n VerifyHostKeyDNS yes\n KnownHostsCommand echo alternate-key\n".utf8).write(to: sshConfig)
+        let config = try await LocalGit.command("/usr/bin/ssh", ["-G", "-F", sshConfig.path] + LocalGit.sshArguments(knownHosts: knownHosts))
         try check(config.status == 0 && config.text.contains("stricthostkeychecking true") && config.text.contains("hostkeyalgorithms ssh-ed25519"), "SSH must enforce strict host checking and the pinned key algorithm")
+        for setting in ["forwardagent no", "forwardx11 no", "clearallforwardings yes", "permitlocalcommand no", "controlmaster false", "verifyhostkeydns false", "preferredauthentications publickey"] {
+            try check(config.text.contains(setting), "SSH must enforce \(setting)")
+        }
+        try check(!config.text.contains("should-not-reuse") && !config.text.contains("knownhostscommand ") && !config.text.contains("localforward "), "SSH must not reuse multiplexed sessions or configured tunnels")
         try check(config.text.contains(knownHosts.path) && config.text.contains("hostkeyalias github.com"), "Known-host paths with spaces and canonical host aliases must survive option parsing")
         try check(LocalGit.sshFailure("Permission denied (publickey).", status: 255, agentStatus: 1).contains("no unlocked keys"), "An empty agent needs a specific error")
         try check(LocalGit.sshFailure("Permission denied (publickey).", status: 255, agentStatus: 0).contains("GitHub rejected"), "A rejected loaded key needs a specific error")

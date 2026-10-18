@@ -43,16 +43,53 @@ enum LocalGit {
             process.standardError = pipe
             process.standardInput = FileHandle.nullDevice
             try process.run()
-            let watchdog = DispatchWorkItem { if process.isRunning { process.terminate() } }
-            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout, execute: watchdog)
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            // Nonblocking, bounded reads prevent hostile repository output or a
+            // descendant holding the pipe open from exhausting memory or hanging scans.
+            let fd = pipe.fileHandleForReading.fileDescriptor
+            _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
+            let deadline = ProcessInfo.processInfo.systemUptime + timeout
+            let limit = 8 * 1024 * 1024
+            var data = Data()
+            var buffer = [UInt8](repeating: 0, count: 16 * 1024)
+            while true {
+                if ProcessInfo.processInfo.systemUptime >= deadline {
+                    if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+                    process.waitUntilExit()
+                    return CommandOutput(status: 124, text: "Command exceeded its time limit.")
+                }
+                let count = read(fd, &buffer, buffer.count)
+                if count > 0 {
+                    guard data.count + count <= limit else {
+                        if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+                        process.waitUntilExit()
+                        throw ServiceError(message: "Command output exceeded the safe size limit.")
+                    }
+                    data.append(contentsOf: buffer.prefix(count))
+                    continue
+                }
+                if count == 0 || !process.isRunning { break }
+                if errno != EAGAIN && errno != EINTR {
+                    kill(process.processIdentifier, SIGKILL)
+                    process.waitUntilExit()
+                    throw ServiceError(message: "Could not read command output.")
+                }
+                usleep(10_000)
+            }
+            // EOF can arrive before process exit, so keep enforcing the deadline.
+            while process.isRunning {
+                if ProcessInfo.processInfo.systemUptime >= deadline {
+                    kill(process.processIdentifier, SIGKILL)
+                    process.waitUntilExit()
+                    return CommandOutput(status: 124, text: "Command exceeded its time limit.")
+                }
+                usleep(10_000)
+            }
             process.waitUntilExit()
-            watchdog.cancel()
             return CommandOutput(status: process.terminationStatus, text: String(decoding: data, as: UTF8.self))
         }.value
     }
     static func git(_ path: String, _ arguments: [String]) async throws -> CommandOutput {
-        try await command("/usr/bin/git", ["--no-pager", "--no-replace-objects", "-c", "core.fsmonitor=false", "-C", path] + arguments)
+        try await command("/usr/bin/git", ["--no-pager", "--no-replace-objects", "-c", "core.fsmonitor=false", "-c", "log.showSignature=false", "-c", "core.hooksPath=/dev/null", "-c", "protocol.allow=never", "-C", path] + arguments, environment: ["GIT_NO_LAZY_FETCH": "1"])
     }
     // GitHub's published Ed25519 host key. Never accept a key obtained from an
     // unverified scan. A rotation requires reviewing the official source and updating this pin.
@@ -65,7 +102,13 @@ enum LocalGit {
         return ["-T", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
                 "-o", "UserKnownHostsFile=\"\(escaped)\"", "-o", "GlobalKnownHostsFile=/dev/null",
                 "-o", "HostKeyAlgorithms=ssh-ed25519", "-o", "HostKeyAlias=github.com",
-                "-o", "UpdateHostKeys=no", "-o", "ConnectTimeout=10",
+                "-o", "UpdateHostKeys=no", "-o", "KnownHostsCommand=none",
+                "-o", "VerifyHostKeyDNS=no", "-o", "PreferredAuthentications=publickey",
+                "-o", "ForwardAgent=no",
+                "-o", "ForwardX11=no", "-o", "ClearAllForwardings=yes",
+                "-o", "PermitLocalCommand=no", "-o", "RemoteCommand=none",
+                "-o", "ControlMaster=no", "-o", "ControlPath=none",
+                "-o", "ConnectTimeout=10",
                 "-o", "ConnectionAttempts=1", "git@github.com"]
     }
     static func sshFailure(_ output: String, status: Int32, agentStatus: Int32?) -> String {
@@ -141,7 +184,7 @@ enum LocalGit {
             var emails = Set(extras)
             if let configured { emails.insert(configured); detectedEmails[selection.path] = configured }
             guard !emails.isEmpty else { throw ServiceError(message: "Set git config user.email in \(selection.name), or add your author email in Settings, so other people’s commits aren’t counted.") }
-            let result = try await git(selection.path, ["log", "--all", "--since-as-filter=@\(Int(start.timeIntervalSince1970))", "--until=@\(Int(end.timeIntervalSince1970))", "--format=%H%x09%ae%x09%ct"])
+            let result = try await git(selection.path, ["log", "--no-show-signature", "--no-ext-diff", "--no-textconv", "--all", "--since-as-filter=@\(Int(start.timeIntervalSince1970))", "--until=@\(Int(end.timeIntervalSince1970))", "--format=%H%x09%ae%x09%ct"])
             if result.status != 0 {
                 // An initialized repository with no commits is a valid zero.
                 let head = try await git(selection.path, ["rev-parse", "--verify", "HEAD"])

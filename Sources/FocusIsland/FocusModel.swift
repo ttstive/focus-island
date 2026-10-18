@@ -245,8 +245,11 @@ final class FocusModel: ObservableObject {
     func save() {
         guard !loadFailed else { return }
         do {
-            try FileManager.default.createDirectory(at: storeURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let directory = storeURL.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
             try JSONEncoder().encode(days).write(to: storeURL, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: storeURL.path)
         } catch { self.error = "Could not save activity: \(error.localizedDescription)" }
     }
     private func armWatchers() {

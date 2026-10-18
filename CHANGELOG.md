@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1
+
+- Prevent repository-configured signature-verification programs from executing during commit scans.
+- Disable Git transport protocols and lazy object fetching during monitoring.
+- Bound subprocess output to 8 MiB and enforce deadlines even when a process ignores graceful termination.
+- Enforce SSH public-key authentication, disable forwarding and local commands, and prevent multiplexed sessions, DNS trust, or alternate known-host helpers from bypassing the pinned host-key check.
+- Save activity history with owner-only directory/file permissions.
+- Add regression fixtures reproducing verifier execution and testing the mitigations.
+
 ## 0.2.0
 
 - Support Xcode, DataGrip, and other popular IDEs alongside VS Code.

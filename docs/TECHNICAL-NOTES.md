@@ -57,6 +57,14 @@ Only today is refreshed; past commit counts are the last observed snapshots from
 
 Commit volume is a personal signal, not a measure of code quality or productivity.
 
+## Security boundaries
+
+Commit scans disable signature verification, external diffs, text conversion, hooks, lazy fetching, and Git transport protocols. This prevents repository configuration from launching a signature verifier during an otherwise read-only log scan. See Git’s [signature-display behavior](https://git-scm.com/docs/git-log). Subprocesses have an 8 MiB output limit and a hard deadline; oversized or timed-out scans fail visibly instead of publishing partial counts.
+
+SSH verification explicitly disables agent/X11/port forwarding, local commands, connection sharing, DNS host-key trust, and alternate known-host commands. It requires public-key authentication and a fresh connection checked against the bundled host key. These settings override corresponding defaults in your SSH configuration; see the [OpenSSH configuration reference](https://man.openbsd.org/ssh_config). User-owned SSH configuration remains trusted for identity selection, agents, proxies, and `Match exec`; this app does not sandbox system Git or SSH. Keep macOS Command Line Tools updated for vulnerabilities in those system executables.
+
+Activity saves set the application’s history directory to `0700` and its JSON file to `0600`. This protects against other local accounts, not software already running as your account. Author emails, repository selections, and other preferences still use macOS user defaults. This review is a focused source review with regression checks, not a guarantee that all vulnerabilities have been found.
+
 ## Privacy and storage
 
 - Activity: `~/Library/Application Support/FocusIsland/days.json` (daily/hourly totals and commit counts).
