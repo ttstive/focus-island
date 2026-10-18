@@ -41,6 +41,20 @@ Every running IDE has its own session consent. Enabling an app makes it eligible
   <img src="docs/images/editors.png" width="530" alt="Settings with per-IDE switches for VS Code, Xcode, DataGrip, and other editors">
 </p>
 
+### Xcode and DataGrip in action
+
+Each IDE asks for permission when opened. After you accept, the island follows the foreground IDE and updates your combined daily focus total in real time.
+
+| Xcode session prompt | DataGrip session prompt |
+| --- | --- |
+| ![Xcode session consent](docs/images/xcode-consent.png) | ![DataGrip session consent](docs/images/datagrip-consent.png) |
+
+| Working in Xcode | Working in DataGrip |
+| --- | --- |
+| ![Expanded island tracking Xcode](docs/images/xcode-island.png) | ![Expanded island tracking DataGrip](docs/images/datagrip-island.png) |
+
+*Rendered from the app’s native views with demo data. See the [changelog](CHANGELOG.md) for the latest additions.*
+
 ## Meet the island
 
 <p align="center">

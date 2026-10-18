@@ -16,7 +16,13 @@ enum ScreenshotExporter {
         try await render(SettingsView(model: model), size: NSSize(width: 530, height: 720), to: directory.appendingPathComponent("setup.png"))
         try await render(SettingsView(model: model, showEditors: true), size: NSSize(width: 530, height: 720), to: directory.appendingPathComponent("editors.png"))
         try await render(SessionConsentView(editor: EditorSession(id: 1, name: "VS Code"), choose: { _ in }), size: NSSize(width: 420, height: 255), to: directory.appendingPathComponent("session-consent.png"))
-        print("Exported six interface screenshots with demo data to \(directory.path)")
+        for (name, slug) in [("Xcode", "xcode"), ("DataGrip", "datagrip")] {
+            model.currentEditorName = name
+            model.status = "In the flow · \(name)"
+            try await render(SessionConsentView(editor: EditorSession(id: 1, name: name), choose: { _ in }), size: NSSize(width: 420, height: 255), to: directory.appendingPathComponent("\(slug)-consent.png"))
+            try await render(IslandView(model: model, expanded: true, toggle: {}, dashboard: {}), size: NSSize(width: 390, height: 215), to: directory.appendingPathComponent("\(slug)-island.png"))
+        }
+        print("Exported ten interface screenshots with demo data to \(directory.path)")
     }
     private static func render<V: View>(_ root: V, size: NSSize, to url: URL) async throws {
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
