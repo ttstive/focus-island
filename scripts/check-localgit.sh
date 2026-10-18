@@ -10,6 +10,7 @@ trap 'rm -rf "$CHECK_DIR"' EXIT
 swiftc -swift-version 6 -module-cache-path "$SWIFTPM_MODULECACHE_OVERRIDE" \
   -I "$BIN_DIR/Modules" \
   "$BIN_DIR/FocusCore.build/Activity.swift.o" \
+  "$BIN_DIR/FocusCore.build/EditorCatalog.swift.o" \
   "$BIN_DIR/FocusCore.build/Commits.swift.o" \
   "$BIN_DIR/FocusCore.build/SessionConsent.swift.o" \
   Sources/FocusIsland/LocalGit.swift scripts/check-localgit.swift \

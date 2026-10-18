@@ -3,6 +3,7 @@ import Combine
 import CoreGraphics
 import FocusCore
 import Security
+import UniformTypeIdentifiers
 
 struct EditorSession: Identifiable, Equatable, Sendable {
     var id: Int32
@@ -15,7 +16,11 @@ final class FocusModel: ObservableObject {
     @Published var requestedEditor: EditorSession?
     @Published var active = false
     @Published var paused = false
-    @Published var status = "Waiting for VS Code"
+    @Published var status = "Waiting for your IDE"
+    @Published var currentEditorName = "Your editors"
+    @Published private(set) var editorApps = EditorCatalog.builtIns
+    @Published private(set) var disabledEditorIDs: Set<String> = []
+    var monitoredEditorIDs: Set<String> { Set(editorApps.map(\.id)).subtracting(disabledEditorIDs) }
     @Published var login = UserDefaults.standard.string(forKey: "sshLogin") ?? ""
     @Published var repositories: [RepositoryCount] = []
     @Published var selections: [RepositorySelection] = []
@@ -82,6 +87,7 @@ final class FocusModel: ObservableObject {
                 days[key] = record
             }
             active = true
+            currentEditorName = "VS Code"
             status = "In the flow · VS Code"
             return
         }
@@ -102,6 +108,10 @@ final class FocusModel: ObservableObject {
             UserDefaults.standard.removeObject(forKey: "clientID")
             UserDefaults.standard.removeObject(forKey: "githubLogin")
         }
+        if let data = UserDefaults.standard.data(forKey: "customEditors"), let saved = try? JSONDecoder().decode([TrackedEditor].self, from: data) {
+            editorApps = EditorCatalog.merging(saved)
+        }
+        disabledEditorIDs = Set((UserDefaults.standard.stringArray(forKey: "disabledEditorIDs") ?? []).map { $0.lowercased() })
         connected = UserDefaults.standard.bool(forKey: "sshVerified") && !login.isEmpty
         let center = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.willSleepNotification, NSWorkspace.screensDidSleepNotification, NSWorkspace.sessionDidResignActiveNotification] {
@@ -131,7 +141,7 @@ final class FocusModel: ObservableObject {
         tick()
     }
     func editorSessionsChanged() {
-        let editors = NSWorkspace.shared.runningApplications.filter { Activity.editors.contains($0.bundleIdentifier ?? "") }
+        let editors = NSWorkspace.shared.runningApplications.filter { EditorCatalog.contains($0.bundleIdentifier, in: monitoredEditorIDs) }
         let running = Set(editors.map(\.processIdentifier))
         let hadPermission = consent.hasPermission
         consent.reconcile(running)
@@ -143,7 +153,7 @@ final class FocusModel: ObservableObject {
         pendingEditors.removeAll { !running.contains($0.id) }
         if let requested = requestedEditor, !running.contains(requested.id) { requestedEditor = nil }
         for editor in editors where consent.decision(for: editor.processIdentifier) == nil && requestedEditor?.id != editor.processIdentifier && !pendingEditors.contains(where: { $0.id == editor.processIdentifier }) {
-            pendingEditors.append(EditorSession(id: editor.processIdentifier, name: editor.localizedName ?? "VS Code"))
+            pendingEditors.append(EditorSession(id: editor.processIdentifier, name: editorName(for: editor.bundleIdentifier, fallback: editor.localizedName ?? "Editor")))
         }
         presentNextConsent()
         tick()
@@ -168,9 +178,9 @@ final class FocusModel: ObservableObject {
         tick()
     }
     private func requestSessionConsent() {
-        let editors = NSWorkspace.shared.runningApplications.filter { Activity.editors.contains($0.bundleIdentifier ?? "") }
+        let editors = NSWorkspace.shared.runningApplications.filter { EditorCatalog.contains($0.bundleIdentifier, in: monitoredEditorIDs) }
         guard let editor = editors.first(where: { $0.isActive }) ?? editors.first else {
-            status = "Open VS Code to start a session"
+            status = "Open an enabled IDE to start a session"
             return
         }
         consent.requestAgain(editor.processIdentifier)
@@ -200,7 +210,7 @@ final class FocusModel: ObservableObject {
         let onConsole = session?["kCGSSessionOnConsoleKey"] as? Bool ?? true
         let foreground = NSWorkspace.shared.frontmostApplication
         let permitted = foreground.map { consent.allows($0.processIdentifier) } ?? false
-        let current = Activity.isActive(bundleID: foreground?.bundleIdentifier, idle: idle, suspended: suspended || locked || !onConsole, paused: paused, consented: permitted)
+        let current = Activity.isActive(bundleID: foreground?.bundleIdentifier, idle: idle, suspended: suspended || locked || !onConsole, paused: paused, consented: permitted, editorBundleIDs: monitoredEditorIDs)
         if previousActive {
             // Stop exactly at the idle cutoff even if the next observation arrives later.
             let end = idle >= 60 ? min(now, now.addingTimeInterval(60 - idle)) : now
@@ -209,13 +219,16 @@ final class FocusModel: ObservableObject {
         lastSample = now
         previousActive = current
         active = current
+        if EditorCatalog.contains(foreground?.bundleIdentifier, in: monitoredEditorIDs) {
+            currentEditorName = editorName(for: foreground?.bundleIdentifier, fallback: foreground?.localizedName ?? "Editor")
+        }
         if requestedEditor != nil && !hasSessionConsent { status = "Waiting for your tracking choice" }
         else if !hasSessionConsent { status = "Session tracking is off" }
         else if paused { status = "Tracking paused" }
         else if suspended || locked || !onConsole { status = "Mac is resting" }
         else if idle >= 60 { status = "Idle · timer resting" }
-        else if current { status = "In the flow · VS Code" }
-        else { status = "Waiting for VS Code" }
+        else if current { status = "In the flow · \(currentEditorName)" }
+        else { status = "Waiting for your IDE" }
         if now.timeIntervalSince(lastSaved) >= 15 { save(); lastSaved = now }
         if now.timeIntervalSince(lastScanned) >= 2 { lastScanned = now; Task { await refresh() } }
         let key = Activity.dayKey(now)
@@ -274,6 +287,54 @@ final class FocusModel: ObservableObject {
             guard generation == repositoryGeneration, hasSessionConsent, !paused, !suspended else { return }
             self.error = error.localizedDescription
         }
+    }
+    private func editorName(for bundleID: String?, fallback: String) -> String {
+        editorApps.first { $0.id == bundleID?.lowercased() }?.name ?? fallback
+    }
+    func isEditorEnabled(_ editor: TrackedEditor) -> Bool { monitoredEditorIDs.contains(editor.id) }
+    func setEditorEnabled(_ editor: TrackedEditor, enabled: Bool) {
+        tick()
+        if enabled { disabledEditorIDs.remove(editor.id) } else { disabledEditorIDs.insert(editor.id) }
+        editorPreferencesChanged()
+    }
+    func addEditorApplication() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = true
+        panel.directoryURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
+        panel.message = "Choose the IDE or editor applications that may ask to track a session."
+        guard panel.runModal() == .OK else { return }
+        tick()
+        for url in panel.urls {
+            guard let bundle = Bundle(url: url), let identifier = bundle.bundleIdentifier,
+                  identifier.lowercased() != "org.focusisland.app" else {
+                error = "Choose an application with a valid bundle identifier other than Focus Island."
+                continue
+            }
+            let name = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? bundle.object(forInfoDictionaryKey: "CFBundleName") as? String ?? url.deletingPathExtension().lastPathComponent
+            let editor = TrackedEditor(id: identifier, name: name)
+            if !editorApps.contains(where: { $0.id == editor.id }) { editorApps.append(editor) }
+            disabledEditorIDs.remove(editor.id)
+        }
+        editorPreferencesChanged()
+    }
+    func removeCustomEditor(_ editor: TrackedEditor) {
+        guard !EditorCatalog.defaultIDs.contains(editor.id) else { return }
+        tick()
+        editorApps.removeAll { $0.id == editor.id }
+        disabledEditorIDs.remove(editor.id)
+        editorPreferencesChanged()
+    }
+    private func editorPreferencesChanged() {
+        guard !previewMode else { return }
+        UserDefaults.standard.set(disabledEditorIDs.sorted(), forKey: "disabledEditorIDs")
+        let custom = editorApps.filter { !EditorCatalog.defaultIDs.contains($0.id) }
+        UserDefaults.standard.set(try? JSONEncoder().encode(custom), forKey: "customEditors")
+        previousActive = false
+        repositoryGeneration += 1
+        editorSessionsChanged()
     }
     func saveAuthorEmails(_ draft: String) throws {
         guard let emails = CommitRules.authorEmails(draft) else {

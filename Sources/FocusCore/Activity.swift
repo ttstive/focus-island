@@ -9,9 +9,9 @@ public struct DayRecord: Codable, Equatable, Identifiable, Sendable {
 }
 
 public enum Activity {
-    public static let editors: Set<String> = ["com.microsoft.VSCode", "com.microsoft.VSCodeInsiders"]
-    public static func isActive(bundleID: String?, idle: Double, suspended: Bool, paused: Bool, consented: Bool) -> Bool {
-        consented && !suspended && !paused && idle < 60 && idle >= 0 && editors.contains(bundleID ?? "")
+    public static let editors = EditorCatalog.defaultIDs
+    public static func isActive(bundleID: String?, idle: Double, suspended: Bool, paused: Bool, consented: Bool, editorBundleIDs: Set<String> = EditorCatalog.defaultIDs) -> Bool {
+        consented && !suspended && !paused && idle < 60 && idle >= 0 && EditorCatalog.contains(bundleID, in: editorBundleIDs)
     }
     public static func dayKey(_ date: Date, calendar: Calendar = .current) -> String {
         let c = calendar.dateComponents([.year, .month, .day], from: date)

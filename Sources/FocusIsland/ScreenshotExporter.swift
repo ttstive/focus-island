@@ -14,8 +14,9 @@ enum ScreenshotExporter {
         model.connected = false
         model.login = ""
         try await render(SettingsView(model: model), size: NSSize(width: 530, height: 720), to: directory.appendingPathComponent("setup.png"))
+        try await render(SettingsView(model: model, showEditors: true), size: NSSize(width: 530, height: 720), to: directory.appendingPathComponent("editors.png"))
         try await render(SessionConsentView(editor: EditorSession(id: 1, name: "VS Code"), choose: { _ in }), size: NSSize(width: 420, height: 255), to: directory.appendingPathComponent("session-consent.png"))
-        print("Exported five interface screenshots with demo data to \(directory.path)")
+        print("Exported six interface screenshots with demo data to \(directory.path)")
     }
     private static func render<V: View>(_ root: V, size: NSSize, to url: URL) async throws {
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)

@@ -6,7 +6,7 @@
 
 **A quiet macOS companion for intentional coding.**
 
-Track active VS Code time, see your daily commits, and keep your goals close in a floating island.
+Track active IDE time, see your daily commits, and keep your goals close in a floating island.
 
 macOS 14+ · Swift 6 · SwiftUI + AppKit · MIT
 
@@ -20,14 +20,26 @@ macOS 14+ · Swift 6 · SwiftUI + AppKit · MIT
 
 ## A little more intentional
 
-- **Live focus time.** Counts while VS Code or Insiders is active, awake, and recently used. Pauses when you switch apps, lock the Mac, or go idle.
-- **Your choice, each session.** Opening VS Code asks **Track this session** or **Not now**. Monitoring starts only after acceptance.
+- **Live focus time.** Counts while your enabled IDE is active, awake, and recently used. Pauses when you switch apps, lock the Mac, or go idle.
+- **Your choice, each session.** Opening an enabled IDE asks **Track this session** or **Not now**. Monitoring starts only after acceptance.
 - **Daily local commits.** Reads selected Git repositories, including unpushed commits. Filters your author identities and deduplicates hashes across clones.
 - **Optional SSH connection.** Verifies your GitHub identity using your existing SSH key and agent. No API token, password, or private-key upload.
 - **An island that fits your desk.** Move it across monitors, resize it, or collapse it into a compact status bar. Position and sizes are remembered.
 - **A personal dashboard.** Set focus and commit goals, see hourly activity and seven-day history, export JSON, and get an evening recap.
 
 Commit counts are a personal signal, not a measure of code quality or productivity.
+
+## Your IDE, your choice
+
+Built-in support covers VS Code/Insiders, **Xcode**, **DataGrip**, IntelliJ IDEA, PyCharm, WebStorm, PhpStorm, CLion, GoLand, Rider, RubyMine, Android Studio, Cursor, Windsurf, Zed, and Sublime Text.
+
+Open **Settings & connections → Editors & IDEs** to enable or disable individual apps. Use **Add app…** to select any other IDE’s `.app`, including beta/EAP editions with different application identities. The app reads the exact bundle identifier from your selection; it does not track vendor launchers or background helpers by name.
+
+Every running IDE has its own session consent. Enabling an app makes it eligible to ask; it never silently grants permission. Only the foreground, consented IDE contributes time, so switching between two IDEs cannot double count. The dashboard and island show the active IDE’s name. Focus time remains one combined daily total. Terminal-based editors can be tracked by selecting their terminal app; that counts the terminal app’s activity rather than an individual shell program.
+
+<p align="center">
+  <img src="docs/images/editors.png" width="530" alt="Settings with per-IDE switches for VS Code, Xcode, DataGrip, and other editors">
+</p>
 
 ## Meet the island
 
@@ -53,7 +65,7 @@ open "dist/Focus Island.app"
 
 For Spotlight access, run `./scripts/install-app.sh` to install the icon-bearing app in `~/Applications` and register it with macOS. You can also move **Focus Island.app** from `dist` to an Applications folder yourself. This source build is ad hoc signed; a notarized public binary is not provided yet.
 
-1. Open Focus Island, then open VS Code.
+1. Open Focus Island, choose your editors in Settings, then open an enabled IDE.
 2. Choose **Track this session** in the prompt.
 3. Open **Settings & connections → Add folders…** and select your Git repositories.
 4. The app detects Git’s actual author email. Add other author addresses if needed and click **Save emails**.
@@ -69,12 +81,12 @@ For Spotlight access, run `./scripts/install-app.sh` to install the icon-bearing
 
 | Metric | What it means |
 | --- | --- |
-| Focused time | Foreground VS Code/Insiders time during an accepted session, with less than 60 seconds of input idle time; excludes sleep, lock, and manual pause. |
+| Focused time | Foreground time in an enabled IDE during an accepted session, with less than 60 seconds of input idle time; excludes sleep, lock, and manual pause. |
 | Commits today | Unique, reachable commits in selected local repositories, matching your resolved Git author identity or saved email addresses, with a committer timestamp in the current local day. |
 | GitHub connection | SSH verification of your account identity. It does not access GitHub’s contribution API. |
 | History | Focus totals and the last commit snapshot observed on each recorded day; no historical commit backfill. |
 
-Creating or deleting a file contributes to focused time while you work in VS Code. The commit counter changes when that work is committed to Git. Daily commit counts can include work from earlier in the day; consent controls when scans run. Amend, rebase, deleted refs, shallow history, and author changes can affect counts. See [tracking details](docs/TECHNICAL-NOTES.md).
+Creating or deleting a file contributes to focused time while you work in an enabled IDE. The commit counter changes when that work is committed to Git. Daily commit counts can include work from earlier in the day; consent controls when scans run. Amend, rebase, deleted refs, shallow history, and author changes can affect counts. See [tracking details](docs/TECHNICAL-NOTES.md).
 
 ## Private by design
 

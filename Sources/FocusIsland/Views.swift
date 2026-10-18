@@ -29,7 +29,7 @@ struct Dashboard: View {
                 }
                 VStack(alignment: .leading, spacing: 12) {
                     Text("YOUR SPACE").font(.system(size: 9, weight: .semibold)).tracking(2).foregroundStyle(Color.muted)
-                    HStack { Image(systemName: "chevron.left.forwardslash.chevron.right").foregroundStyle(Color.mint); Text("Visual Studio Code").font(.system(size: 12)) }
+                    HStack { Image(systemName: "chevron.left.forwardslash.chevron.right").foregroundStyle(Color.mint); Text(model.currentEditorName).font(.system(size: 12)) }
                     HStack { Circle().fill(model.active ? Color.mint : Color.muted).frame(width: 5, height: 5); Text(model.status).font(.system(size: 10)).foregroundStyle(Color.muted) }
                 }.padding(.top, 10)
                 Spacer()
@@ -47,7 +47,7 @@ struct Dashboard: View {
                     header
                     if let editor = model.requestedEditor {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Track this VS Code session?").font(.system(size: 16, weight: .semibold))
+                            Text("Track this \(editor.name) session?").font(.system(size: 16, weight: .semibold))
                             Text("Focus time and commit updates stay off until you choose.").font(.system(size: 12)).foregroundStyle(Color.muted)
                             HStack { Button("Not now") { model.respondToConsent(editor, allow: false) }; Button("Track this session") { model.respondToConsent(editor, allow: true) }.tint(.mint) }
                         }.padding(18).frame(maxWidth: .infinity, alignment: .leading).card()
@@ -97,7 +97,7 @@ struct Dashboard: View {
             }
             VStack(alignment: .leading, spacing: 20) {
                 HStack {
-                    VStack(alignment: .leading, spacing: 5) { Text("The shape of your day").font(.system(size: 14, weight: .semibold)); Text("Active minutes in VS Code, by hour").font(.system(size: 11)).foregroundStyle(Color.muted) }
+                    VStack(alignment: .leading, spacing: 5) { Text("The shape of your day").font(.system(size: 14, weight: .semibold)); Text("Active minutes across your IDEs, by hour").font(.system(size: 11)).foregroundStyle(Color.muted) }
                     Spacer()
                     HStack(spacing: 5) { Circle().fill(Color.mint).frame(width: 5, height: 5); Text(model.active ? "LIVE" : "TODAY").font(.system(size: 9, weight: .semibold)).tracking(1) }.foregroundStyle(Color.mint)
                 }
@@ -161,6 +161,12 @@ struct SettingsView: View {
     @State private var emailDraft = ""
     @State private var emailFeedback: String?
     @State private var emailInvalid = false
+    @State private var showEditors = false
+
+    init(model: FocusModel, showEditors: Bool = false) {
+        self.model = model
+        _showEditors = State(initialValue: showEditors)
+    }
 
     @discardableResult
     private func applyEmails() -> Bool {
@@ -184,6 +190,27 @@ struct SettingsView: View {
                     Text("DAILY INTENTIONS").font(.system(size: 10, weight: .medium)).tracking(2).foregroundStyle(Color.muted)
                     HStack { Text("Focused minutes"); Spacer(); Stepper("\(Int(model.focusGoal)) min", value: $model.focusGoal, in: 15...720, step: 15).frame(width: 165) }
                     HStack { Text("Commit goal"); Spacer(); Stepper("\(model.commitGoal) commits", value: $model.commitGoal, in: 1...100).frame(width: 165) }
+                    Divider()
+                    HStack {
+                        Text("EDITORS & IDES").font(.system(size: 10, weight: .medium)).tracking(2).foregroundStyle(Color.muted)
+                        Spacer()
+                        Button("Add app…") { model.addEditorApplication() }
+                    }
+                    DisclosureGroup("Choose monitored apps (\(model.monitoredEditorIDs.count) enabled)", isExpanded: $showEditors) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(model.editorApps) { editor in
+                                HStack {
+                                    Toggle(editor.name, isOn: Binding(get: { model.isEditorEnabled(editor) }, set: { model.setEditorEnabled(editor, enabled: $0) }))
+                                        .toggleStyle(.switch).controlSize(.mini).help(editor.id)
+                                    if !EditorCatalog.defaultIDs.contains(editor.id) {
+                                        Button { model.removeCustomEditor(editor) } label: { Image(systemName: "minus.circle") }.buttonStyle(.plain).help("Remove custom editor")
+                                    }
+                                }
+                            }
+                        }.padding(.top, 10)
+                    }
+                    Text("VS Code, Xcode, DataGrip, JetBrains IDEs, Android Studio, and more. Add any other IDE by selecting its app. Each enabled app asks for consent on launch.")
+                        .font(.system(size: 10)).foregroundStyle(Color.muted)
                     Divider()
                     Text("GITHUB · SSH KEY").font(.system(size: 10, weight: .medium)).tracking(2).foregroundStyle(Color.muted)
                     if model.connected {
@@ -224,7 +251,7 @@ struct SettingsView: View {
                     Text("Git metadata changes trigger an immediate refresh, with a two-second fallback scan. Repository contents and private keys never leave your Mac. Local tracking works even without SSH verification.").font(.system(size: 10)).foregroundStyle(Color.muted)
                     if let error = model.error { Text(error).font(.system(size: 11)).foregroundStyle(.orange).textSelection(.enabled) }
                     Divider()
-                    Text("Each VS Code launch asks whether to track. After you choose Track this session, app switches update immediately and the clock updates four times a second. Tracking pauses after 60 seconds idle, during sleep/lock, or when another app is in front. No keyboard content is recorded.").font(.system(size: 11)).foregroundStyle(Color.muted)
+                    Text("Each enabled IDE launch asks whether to track. After you choose Track this session, app switches update immediately and the clock updates four times a second. Tracking pauses after 60 seconds idle, during sleep/lock, or when another app is in front. No keyboard content is recorded.").font(.system(size: 11)).foregroundStyle(Color.muted)
                 }.padding(.trailing, 4)
             }.frame(maxHeight: 520)
             HStack { Button("Export my history") { model.export() }; Spacer(); Button("Quit Focus Island") { NSApplication.shared.terminate(nil) } }

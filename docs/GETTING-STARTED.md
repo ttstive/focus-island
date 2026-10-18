@@ -1,6 +1,6 @@
 # Get started with Focus Island
 
-This guide walks through installation, optional GitHub login with an SSH key, and the first tracked VS Code session. You never enter your GitHub password or private key into Focus Island.
+This guide walks through installation, optional GitHub login with an SSH key, and the first tracked IDE session. You never enter your GitHub password or private key into Focus Island.
 
 ## 1. Build and open the app
 
@@ -120,20 +120,30 @@ git log -1 --format='%ae'
 
 If older commits use a different address, add it as another saved identity. The app does not modify your Git configuration.
 
-## 8. Open VS Code and choose whether to track
+## 8. Choose your IDEs and start a session
 
-When VS Code or Insiders launches, Focus Island asks:
+In **Settings & connections → Editors & IDEs**, expand **Choose monitored apps**. Enable or disable individual IDEs. The catalogue includes VS Code/Insiders, Xcode, DataGrip, common JetBrains IDEs, Android Studio, Cursor, Windsurf, Zed, and Sublime Text.
+
+For another IDE, use **Add app…** and select its installed `.app`. Its application name and exact bundle identifier are stored locally. This also supports beta/EAP editions with different identifiers. Added apps have a remove button; built-in apps can be switched off.
+
+<p align="center">
+  <img src="images/editors.png" width="530" alt="IDE preferences showing per-application tracking switches and Add app">
+</p>
+
+When an enabled IDE launches, Focus Island asks whether to track that particular application’s session:
 
 <p align="center">
   <img src="images/session-consent.png" width="420" alt="Consent prompt with Not now and Track this session buttons">
 </p>
 
 - **Track this session** starts active-time monitoring and daily commit refreshes for your selected repositories.
-- **Not now** leaves that session untracked. Switching between apps will not repeat the prompt.
-- Quitting and reopening VS Code asks again. Starting Focus Island while VS Code is already open also asks.
-- The dashboard’s **Start session** button lets you reconsider a skipped session.
+- **Not now** leaves that IDE’s session untracked. Switching apps does not repeat the prompt.
+- Each IDE gets its own choice. Accepting Xcode does not authorize DataGrip or another IDE.
+- Quitting and reopening an IDE asks again. Starting Focus Island while an enabled IDE is already open also asks.
+- Enabling an already-running IDE asks for consent immediately. Disabling it stops counting its time and clears its session permission.
+- **Start session** in the dashboard lets you reconsider a skipped session.
 
-Nothing is counted before acceptance. After acceptance, work in the foreground VS Code window and watch the seconds tick on the island. Switching away, sleeping, locking, manual pause, or 60 seconds without input pauses focus time.
+Nothing is counted before acceptance. After acceptance, work in the foreground IDE window and watch the seconds tick. Switching to another consented IDE keeps the combined daily timer going; time is never counted twice. Switching to an unrelated app, sleeping, locking, manual pause, or 60 seconds without input pauses focus time.
 
 ## 9. Make a commit and check the dashboard
 
@@ -155,7 +165,7 @@ Daily counts include eligible local commits from earlier that day. They are not 
 | GitHub rejected the key | Add the public authentication key to the intended GitHub account. With several accounts, configure the intended identity in `~/.ssh/config`. |
 | Server key mismatch | Stop and compare GitHub’s official fingerprints. A legitimate key rotation requires an app update; do not disable host verification. |
 | Network or port 22 blocked | GitHub supports SSH at `ssh.github.com:443`; follow its [port 443 guide](https://docs.github.com/en/authentication/troubleshooting-ssh/using-ssh-over-the-https-port). |
-| Timer stays at zero | Accept the session prompt, resume tracking, and bring VS Code to the foreground. Input idle time must be under 60 seconds. |
+| Timer stays at zero | Accept the session prompt, resume tracking, and bring an enabled, consented IDE to the foreground. Input idle time must be under 60 seconds. |
 | Commits stay at zero | Select the correct repository, accept tracking, check author identities, and confirm the commit timestamp falls today. Uncommitted edits do not count. |
 | Emails seem unsaved | Use **Save emails**, Return, or **Done**, then check the **Saved:** line. |
 | Island is misplaced | Use **Reset island position and size** from the waveform menu. |

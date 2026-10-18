@@ -75,6 +75,25 @@ struct CoreChecks {
         consent.reconcile([])
         try expect(!consent.hasPermission, "Closing the editor must end consent")
         print("PASS session consent, decline, app switching, relaunch, and termination")
+        for bundleID in ["com.apple.dt.Xcode", "com.jetbrains.datagrip", "com.jetbrains.WebStorm", "com.jetbrains.intellij", "com.google.android.studio"] {
+            try expect(Activity.isActive(bundleID: bundleID, idle: 1, suspended: false, paused: false, consented: true), "Supported IDE must count when consented: \(bundleID)")
+            try expect(!Activity.isActive(bundleID: bundleID, idle: 1, suspended: false, paused: false, consented: false), "Every IDE must require session consent")
+        }
+        let custom = TrackedEditor(id: "org.example.MyIDE", name: "My IDE")
+        let merged = EditorCatalog.merging([custom, custom, .init(id: "COM.APPLE.DT.XCODE", name: "Duplicate")])
+        try expect(merged.filter { $0.id == custom.id }.count == 1 && merged.filter { $0.id == "com.apple.dt.xcode" }.count == 1, "Custom app selections must normalize identities and deduplicate")
+        let onlyCustom: Set<String> = [custom.id]
+        try expect(Activity.isActive(bundleID: "org.example.MyIDE", idle: 0, suspended: false, paused: false, consented: true, editorBundleIDs: onlyCustom), "An added IDE must be trackable")
+        try expect(!Activity.isActive(bundleID: "com.apple.dt.Xcode", idle: 0, suspended: false, paused: false, consented: true, editorBundleIDs: onlyCustom), "Disabled IDEs must not count even with previous consent")
+        try expect(!EditorCatalog.contains("com.jetbrains.toolbox", in: EditorCatalog.defaultIDs) && !EditorCatalog.contains("com.microsoft.VSCode.helper", in: EditorCatalog.defaultIDs), "Launchers and background helpers must not match")
+        var parallel = SessionConsent()
+        parallel.reconcile([11, 22])
+        parallel.respond(to: 11, allow: true)
+        parallel.respond(to: 22, allow: false)
+        try expect(parallel.allows(11) && !parallel.allows(22), "Different IDEs must keep independent choices")
+        parallel.reconcile([22])
+        try expect(!parallel.hasPermission, "Closing the accepted IDE must not authorize a different declined IDE")
+        print("PASS multi-IDE detection, custom apps, disabling, helper exclusion, and separate consent")
         print("All core checks passed.")
     }
 }

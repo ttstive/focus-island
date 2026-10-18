@@ -1,6 +1,6 @@
 # Technical notes
 
-A native macOS companion for intentional work. Live VS Code tracking, daily local commit goals, SSH account verification, a SwiftUI dashboard, and a floating island below the menu bar. MIT licensed. No Electron, analytics, API tokens, backend, or third-party dependencies.
+A native macOS companion for intentional work. Live IDE tracking, daily local commit goals, SSH account verification, a SwiftUI dashboard, and a floating island below the menu bar. MIT licensed. No Electron, analytics, API tokens, backend, or third-party dependencies.
 
 ## Run
 
@@ -17,15 +17,17 @@ For development: `swift run FocusIsland`. Open `Package.swift` in Xcode if prefe
 
 Drag the dotted grip at the left of the island to move it smoothly across monitors. Drag its lower-right resize grip (or native window edges) to adjust width; expand it first to adjust height too. Expanded and compact sizes are remembered separately, along with placement. Reconnecting displays keeps it within a visible screen. The menu bar’s **Reset island position and size** restores the default placement.
 
-## Live VS Code monitoring
+## Live IDE monitoring
 
-Every VS Code/Insiders launch presents a floating consent prompt: **Track this session** or **Not now**. Until explicitly accepted, neither focus time nor repository commit scans run. Declining skips that editor process without prompting again on app switches. Closing and reopening the editor requires a fresh choice; permissions are kept only in memory. Starting Focus Island while VS Code is already running also asks. **Start session** in the dashboard lets you reconsider a declined session.
+Every enabled IDE launch presents a floating consent prompt: **Track this session** or **Not now**. Until explicitly accepted, neither focus time nor repository commit scans run. Declining skips that editor process without prompting again on app switches. Quitting and reopening the editor process requires a fresh choice; permissions are kept only in memory. Starting Focus Island while an enabled IDE is already running also asks. **Start session** in the dashboard lets you reconsider a declined session.
 
 After consent, workspace activation/deactivation notifications update tracking immediately when you switch apps. A live clock samples every 250 ms in common run-loop modes, including while interacting with controls. The island and dashboard show hours/minutes/seconds. This is interactive monitoring, not hard real-time scheduling; macOS can delay callbacks under load.
 
-Time counts only while VS Code (`com.microsoft.VSCode`) or Insiders is the frontmost app, the Mac is awake with an unlocked active session, and input idle time is less than 60 seconds. The idle cutoff truncates the final interval at the threshold. App switches close the prior active interval at notification delivery. No keystroke content, file names, source code, or window titles are collected. No Accessibility or Screen Recording permission is requested.
+Time counts only while an enabled IDE with its own accepted session is the frontmost app, the Mac is awake with an unlocked active session, and input idle time is less than 60 seconds. The idle cutoff truncates the final interval at the threshold. App switches close the prior active interval at notification delivery. No keystroke content, file names, source code, or window titles are collected. No Accessibility or Screen Recording permission is requested.
 
 Intervals longer than five seconds are discarded to avoid counting sleep or process suspension. Reading without input for more than a minute pauses the timer. Daily/hourly buckets use the current local calendar and split at midnight; changing time zones can mix zones in history. State saves atomically every 15 seconds, on sleep, and on normal exit. A crash can lose up to 15 seconds. Damaged history is preserved and further writes stop for that launch.
+
+IDE recognition uses an explicit catalogue of bundle identifiers and optional user-selected `.app` bundles. Matching normalizes case and uses exact identifiers, so helpers and vendor launchers do not match by prefix. Settings persist disabled identifiers and custom application names/identifiers, not application paths. Consent stays separate per process and is discarded when an IDE is disabled or quits. Totals are combined across IDEs; only one foreground application contributes at a time.
 
 ## GitHub identity via SSH
 
@@ -58,7 +60,7 @@ Commit volume is a personal signal, not a measure of code quality or productivit
 ## Privacy and storage
 
 - Activity: `~/Library/Application Support/FocusIsland/days.json` (daily/hourly totals and commit counts).
-- Preferences: goals, verified SSH username, selected local repository paths, and author emails in macOS user defaults.
+- Preferences: goals, verified SSH username, enabled editor identifiers, custom application names/identifiers, selected local repository paths, and author emails in macOS user defaults.
 - SSH: handled by system OpenSSH and your existing agent; the app stores no credentials.
 - Network: an SSH verification connection to GitHub, only on explicit user action. Local tracking sends no repository data.
 - Exports include daily/hourly totals and commit counts, never repository paths, emails, keys, or credentials.
@@ -77,7 +79,7 @@ The dependency-free checks run with Command Line Tools and Xcode. They cover eli
 
 The build script creates an ad hoc signed app in `dist/`. Public distribution still requires Developer ID signing and notarization. No public repository or release is created by the local build.
 
-Manual checks: foreground/background VS Code transitions, idle cutoff, lock/unlock, sleep/wake, overnight tracking, first commit in an empty repository, worktrees, commit/amend/rebase, multiple cloned repositories, invalid/missing author emails, trusted/untrusted SSH hosts, and display changes. Live SSH verification requires your configured key and explicit user action.
+Manual checks: foreground/background IDE transitions and switches between two consented IDEs, idle cutoff, lock/unlock, sleep/wake, overnight tracking, first commit in an empty repository, worktrees, commit/amend/rebase, multiple cloned repositories, invalid/missing author emails, trusted/untrusted SSH hosts, and display changes. Live SSH verification requires your configured key and explicit user action.
 
 ## Contributing
 
